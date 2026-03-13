@@ -58,5 +58,5 @@ async def download(message: types.Message):
             if os.path.exists("video.mp4"): os.remove("video.mp4")
 
 if __name__ == '__main__':
-    keep_alive() # تشغيل السيرفر في الخلفية
-    executor.start_polling(dp, skip_updates=True)
+    Thread(target=run).start() # تشغيل سيرفر الويب
+    executor.start_polling(dp, skip_updates=True) # تشغيل البوت
