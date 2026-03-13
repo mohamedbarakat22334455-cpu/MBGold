@@ -6,7 +6,7 @@ from flask import Flask
 from threading import Thread
 
 # --- التوكن بتاعك يا بطل ---
-API_TOKEN = '8533015825:AAGy7A-Abn3qqW8lwa7b93-Ii92wNTRP_cU'
+API_TOKEN = '8635678610:AAHtZTMIkSICFyP-a-gAy5WPtPVphXWc6o4'
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
