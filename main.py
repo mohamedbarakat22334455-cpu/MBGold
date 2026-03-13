@@ -5,21 +5,21 @@ from aiogram.utils import executor
 from flask import Flask
 from threading import Thread
 
-# --- الإعدادات الخاصة بك ---
+# --- التوكن بتاعك يا بطل ---
 API_TOKEN = '8533015825:AAGy7A-Abn3qqW8lwa7b93-Ii92wNTRP_cU'
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# --- الجزء الخاص بمنع التوقف (Keep Alive) ---
+# --- سيرفر صغير عشان Railway ميفصلش البوت ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "MB Gold Bot is Running!"
+    return "MB Gold Bot is Online!"
 
 def run():
-    # Railway بيحدد الـ Port تلقائياً، إحنا بنقراه منه
+    # بنقرأ الـ Port اللي Railway بيديهولنا تلقائي
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
 
@@ -27,19 +27,18 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# --- أوامر البوت ---
+# --- أوامر البوت الأساسية ---
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     await message.reply("🏆 أهلاً بك في MB Gold Downloader\n\n"
-                       "ابعتلي أي رابط فيديو (تيك توك، إنستجرام، يوتيوب) وهجيبهولك فوراً بدون علامة مائية.\n\n"
-                       "✨ تطوير: محمد بركات")
+                       "ابعتلي أي رابط فيديو (تيك توك، إنستجرام، يوتيوب) وهجيبهولك فوراً.\n\n"
+                       "تطوير: MB  ت")
 
 @dp.message_handler()
 async def download(message: types.Message):
     if "http" in message.text:
         status_msg = await message.answer("⏳ جاري التحميل... انتظر ثواني يا بطل")
         try:
-            # إعدادات التحميل
             ydl_opts = {
                 'format': 'best',
                 'outtmpl': 'video.mp4',
@@ -49,7 +48,6 @@ async def download(message: types.Message):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([message.text])
             
-            # إرسال الفيديو
             with open('video.mp4', 'rb') as video:
                 await bot.send_video(message.chat.id, video, caption="✅ تم التحميل بنجاح بواسطة MB Gold")
             
@@ -60,6 +58,5 @@ async def download(message: types.Message):
             if os.path.exists("video.mp4"): os.remove("video.mp4")
 
 if __name__ == '__main__':
-    print("البوت بدأ العمل..")
-    keep_alive()  # تشغيل السيرفر لمنع الـ Crash
-    executor.start_polling(dp, skip_updates=True) معالجة الرابط... 
+    keep_alive() # تشغيل السيرفر في الخلفية
+    executor.start_polling(dp, skip_updates=True)
