@@ -29,7 +29,7 @@ async def start(message: types.Message):
         "🏆 **أهلاً بك في MB Gold Pro**\n\n"
         "أنا بوت التحميل الأسرع على تليجرام.\n"
         "فقط أرسل لي رابط الفيديو (TikTok, Reels, Shorts).\n\n"
-        "✨ **تطوير:** محمد بركات"
+        "✨*MBتطوير:** ت"
     )
     await message.reply(welcome_text, parse_mode="Markdown")
 
