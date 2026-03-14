@@ -15,7 +15,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "MB Gold Bot is Online!"
+    return "MB Gold is Running!"
 
 def run():
     port = int(os.environ.get('PORT', 8080))
@@ -23,20 +23,17 @@ def run():
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await message.reply("🏆 أهلاً بك في MB Gold\nابعتلي رابط فيديو قصير (تيك توك، ريلز، يوتيوب) وهجيبهولك فوراً.\n\n✨ تطوير: MBت")
+    await message.reply("🏆 أهلاً بك في MB Gold\nابعت الرابط وهنزلك الفيديو فوراً للمشاهدة.\n\n✨ تطوير: محمد بركات")
 
 @dp.message_handler()
 async def handle_video(message: types.Message):
     if "http" in message.text:
-        # إرسال رابط الأرباح أولاً كدعم
-        await message.answer(f"⏳ جاري تجهيز الفيديو.. لدعمنا اضغط هنا:\n🔗 {MY_EARN_LINK}")
-        
-        status_msg = await message.answer("🚀 جاري التحميل الآن...")
+        status_msg = await message.answer("⏳ جاري معالجة الفيديو والمشاهدة...")
         
         try:
-            # إعدادات مخصصة للفيديوهات القصيرة (تيك توك وريلز)
+            # إعدادات التحميل للفيديوهات القصيرة
             ydl_opts = {
-                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'format': 'best[ext=mp4]',
                 'outtmpl': 'video.mp4',
                 'quiet': True,
                 'no_warnings': True,
@@ -46,22 +43,26 @@ async def handle_video(message: types.Message):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([message.text])
             
-            # إرسال الفيديو كملف مرئي (مشاهدة مباشرة)
+            # إرسال الفيديو للمشاهدة + رابط التحميل للأرباح
             if os.path.exists('video.mp4'):
                 with open('video.mp4', 'rb') as video:
                     await bot.send_video(
                         message.chat.id, 
                         video, 
-                        caption="✅ تم التحميل بواسطة MB Gold\n\n✨ شكراً لمشاهدتك",
-                        timeout=300 # وقت كافٍ للرفع
+                        caption=(
+                            f"✅ تم التجهيز للمشاهدة!\n\n"
+                            f"📥 للتحميل بجودة عالية ودعمنا:\n"
+                            f"🔗 {MY_EARN_LINK}\n\n"
+                            f"✨ تطوير: محمد بركات"
+                        )
                     )
                 os.remove('video.mp4')
                 await bot.delete_message(message.chat.id, status_msg.message_id)
-        
+            else:
+                raise Exception("File Error")
+
         except Exception as e:
-            await message.reply("❌ عذراً، لم أستطع تحميل هذا الفيديو كملف.\nيمكنك مشاهدته عبر رابط الدعم:")
-            await message.answer(f"🔗 {MY_EARN_LINK}")
-            if os.path.exists("video.mp4"): os.remove("video.mp4")
+            await message.reply(f"❌ عذراً، الرابط غير مدعوم أو الفيديو كبير.\n\nشاهده هنا: {MY_EARN_LINK}")
 
 if __name__ == '__main__':
     Thread(target=run).start()
