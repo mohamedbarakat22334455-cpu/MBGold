@@ -1,109 +1,110 @@
 import os
-import yt_dlp
 import sqlite3
+import datetime
+import yt_dlp
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
-from flask import Flask
-from threading import Thread
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# --- الإعدادات الأساسية ---
+# --- الإعدادات (برمجة محمد بركات) ---
 API_TOKEN = '8579385725:AAGZd2wDPxjFyBq7x6R3AMhMJT46tX6Ld5c'
-ADMIN_ID = 123456789  # <--- حط الـ ID بتاعك هنا عشان لوحة التحكم تشتغل
-MY_EARN_LINK = 'https://exe.io/MBABgold' 
+ADMIN_ID = 123456789  # <--- حط الـ ID بتاعك هنا (مهم جداً)
+MY_EARN_LINK = 'https://exe.io/MBABgold'
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
-app = Flask('')
 
-# --- إعداد قاعدة البيانات لحفظ المستخدمين ---
-conn = sqlite3.connect('users.db', check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)''')
+# --- نظام قاعدة البيانات ---
+conn = sqlite3.connect('mb_gold.db', check_same_thread=False)
+db = conn.cursor()
+db.execute('''CREATE TABLE IF NOT EXISTS users 
+             (user_id INTEGER PRIMARY KEY, last_seen TEXT)''')
 conn.commit()
 
-@app.route('/')
-def home():
-    return "MB Gold is Active!"
+def update_user(user_id):
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("INSERT OR REPLACE INTO users (user_id, last_seen) VALUES (?, ?)", (user_id, now))
+    conn.commit()
 
-def run():
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+# --- لوحة تحكم الأدمن (محمد بركات فقط) ---
 
-# حفظ المستخدم الجديد
-def add_user(user_id):
-    try:
-        cursor.execute("INSERT INTO users (user_id) VALUES (?)", (user_id,))
-        conn.commit()
-    except:
-        pass
+@dp.message_handler(commands=['admin'])
+async def admin_panel(message: types.Message):
+    if message.from_user.id == ADMIN_ID:
+        # إحصائيات الزوار
+        db.execute("SELECT COUNT(*) FROM users")
+        total_users = db.fetchone()[0]
+        
+        # إحصائيات المتصلين (آخر 24 ساعة مثلاً)
+        yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+        db.execute("SELECT COUNT(*) FROM users WHERE last_seen > ?", (yesterday,))
+        active_today = db.fetchone()[0]
+        
+        text = (f"👑 **أهلاً بك يا محمد في لوحة التحكم**\n\n"
+                f"📊 إجمالي الزوار (الكل): `{total_users}`\n"
+                f"🟢 المتصلين آخر 24 ساعة: `{active_today}`\n\n"
+                f"📢 للارسال للكل استخدم: `/broadcast` متبوعاً بنص الرسالة")
+        await message.reply(text, parse_mode="Markdown")
 
-@dp.message_handler(commands=['start'])
-async def start(message: types.Message):
-    add_user(message.from_user.id)
-    await message.reply("🏆 **MB Gold Downloader**\n\nأرسل رابط الفيديو للمشاهدة فوراً.\n\n✨ تطوير: محمد بركات", parse_mode="Markdown")
-
-# لوحة تحكم الأدمن (Broadcast)
 @dp.message_handler(commands=['broadcast'])
-async def broadcast(message: types.Message):
+async def broadcast_cmd(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         msg_text = message.text.replace('/broadcast', '').strip()
         if not msg_text:
-            return await message.reply("اكتب الرسالة بعد الأمر، مثال:\n/broadcast أهلاً بكم")
+            return await message.reply("❌ اكتب الرسالة بعد الأمر! مثال:\n`/broadcast كل سنة وأنتم طيبين`")
         
-        cursor.execute("SELECT user_id FROM users")
-        users = cursor.fetchall()
-        count = 0
-        for user in users:
+        db.execute("SELECT user_id FROM users")
+        all_users = db.fetchall()
+        
+        success = 0
+        await message.answer(f"⏳ جاري الإرسال لـ {len(all_users)} مستخدم...")
+        
+        for user in all_users:
             try:
                 await bot.send_message(user[0], msg_text)
-                count += 1
+                success += 1
             except:
                 pass
-        await message.reply(f"✅ تم إرسال الرسالة إلى {count} مستخدم.")
+        
+        await message.answer(f"✅ تم الإرسال بنجاح لـ `{success}` مستخدم.")
+
+# --- نظام التحميل العام ---
+
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    update_user(message.from_user.id)
+    await message.reply(f"🏆 **MB Gold Downloader**\n\nأهلاً بك يا {message.from_user.first_name}\nأرسل رابط الفيديو للتحميل فوراً.\n\n✨ المطور: محمد بركات")
 
 @dp.message_handler()
-async def handle_video(message: types.Message):
+async def dl_handler(message: types.Message):
+    update_user(message.from_user.id) # تحديث وقت التواجد
+    
     if "http" in message.text:
-        status = await message.answer("⏳ جاري تجهيز الفيديو...")
-        file_path = f"vid_{message.chat.id}.mp4"
+        status = await message.answer("⏳ جاري المعالجة...")
+        file_name = f"video_{message.from_user.id}.mp4"
         
         ydl_opts = {
-            'format': 'best[ext=mp4]/best',
-            'outtmpl': file_path,
+            'format': 'best',
+            'outtmpl': file_name,
             'quiet': True,
-            'no_warnings': True,
-            'max_filesize': 48 * 1024 * 1024 # تليجرام بيسمح بـ 50 ميجا للبوتات العادية
+            'max_filesize': 45 * 1024 * 1024
         }
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([message.text])
             
-            if os.path.exists(file_path):
-                with open(file_path, 'rb') as video:
-                    await bot.send_video(
-                        message.chat.id, 
-                        video, 
-                        caption="🎬 **مشاهدة ممتعة من MB Gold**",
-                        supports_streaming=True,
-                        parse_mode="Markdown"
-                    )
-                
-                # إرسال رابط الأرباح مع زرار احترافي
-                kb = InlineKeyboardMarkup().add(InlineKeyboardButton("📥 تحميل بجودة عالية", url=MY_EARN_LINK))
-                await message.answer("لتحميل الفيديو بجودة أعلى ودعمنا، اضغط على الزر:", reply_markup=kb)
-                
-                os.remove(file_path)
-                await status.delete()
-            else:
-                raise Exception("Fail")
-
-        except Exception as e:
-            await status.edit_text(f"❌ الفيديو كبير جداً أو محمي.\nيمكنك محاولة تحميله من هنا: {MY_EARN_LINK}")
-            if os.path.exists(file_path): os.remove(file_path)
+            with open(file_name, 'rb') as video:
+                # أزرار احترافية
+                kb = InlineKeyboardMarkup().add(InlineKeyboardButton("📥 رابط التحميل المباشر", url=MY_EARN_LINK))
+                await bot.send_video(message.chat.id, video, caption="✅ تم بواسطة MB Gold", reply_markup=kb)
+            
+            os.remove(file_name)
+            await status.delete()
+        except Exception:
+            await status.edit_text(f"❌ عذراً، الرابط غير مدعوم أو الحجم كبير.\nجرب هنا: {MY_EARN_LINK}")
+            if os.path.exists(file_name): os.remove(file_name)
 
 if __name__ == '__main__':
-    Thread(target=run).start()
-    print("🚀 MB Gold Bot IS FULLY ACTIVE...")
+    print("🚀 البوت شغال يا محمد ولوحة التحكم جاهزة!")
     executor.start_polling(dp, skip_updates=True)
