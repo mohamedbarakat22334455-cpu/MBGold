@@ -13,7 +13,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
 # --- [ قاعدة البيانات ] ---
-conn = sqlite3.connect('mbab_system.db', check_same_thread=False)
+conn = sqlite3.connect('mbab_pro.db', check_same_thread=False)
 db = conn.cursor()
 db.execute('''CREATE TABLE IF NOT EXISTS users 
              (user_id INTEGER PRIMARY KEY, points INTEGER DEFAULT 0, 
@@ -22,9 +22,9 @@ conn.commit()
 
 # --- [ نظام البداية والإحالة ] ---
 @dp.message_handler(commands=['start'])
-async def start(message: types.Message):
+async def start_cmd(message: types.Message):
     user_id = message.from_user.id
-    args = message.get_args() # الكلمات اللي بعد كلمة start
+    args = message.get_args()
     
     db.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
     if db.fetchone() is None:
@@ -41,41 +41,42 @@ async def start(message: types.Message):
 
     kb = InlineKeyboardMarkup(row_width=2).add(
         InlineKeyboardButton("💰 رصيدي", callback_data="p"),
-        InlineKeyboardButton("🏆 المتصدرين", callback_data="top"),
         InlineKeyboardButton("💳 سحب (15ج)", callback_data="wd"),
-        InlineKeyboardButton("⭐️ تواصل خاص (5 نجوم)", callback_data="stars"),
-        InlineKeyboardButton("📢 قناة البوت", url=CHANNEL_LINK)
+        InlineKeyboardButton("⭐️ تواصل (5 نجوم)", callback_data="stars"),
+        InlineKeyboardButton("📢 القناة", url=CHANNEL_LINK)
     )
     
-    await message.reply(f"🏆 **أهلاً بك في بوت MBAB**\n\n"
-                        f"ابعت أي رابط فيديو (تيك توك، إنستجرام، يوتيوب) وهنزلهولك فوراً.\n\n"
-                        f"🎁 العرض: 100 نقطة = 15 جنيه.\n"
-                        f"🔗 رابط دعوتك كبطل:\n`https://t.me/{(await bot.get_me()).username}?start={user_id}`", 
-                        reply_markup=kb, parse_mode="Markdown")
+    bot_info = await bot.get_me()
+    ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
+    await message.reply(f"🏆 **أهلاً بك في MBAB**\n\n"
+                        f"أرسل رابط الفيديو الآن لتحميله مباشرة!\n\n"
+                        f"🎁 100 نقطة = 15 جنيه.\n"
+                        f"🔗 رابطك: `{ref_link}`", reply_markup=kb)
 
-# --- [ محرك التحميل الذكي ] ---
-@dp.message_handler(lambda message: message.text and "http" in message.text)
-async def link_catcher(message: types.Message):
-    # تجاهل أي رابط لو كان جوه أمر start
+# --- [ معالجة الروابط - الحل النهائي ] ---
+@dp.message_handler(lambda message: "http" in message.text)
+async def handle_links(message: types.Message):
+    # تجاهل أوامر التشغيل لو فيها رابط
     if message.text.startswith('/start'): return
 
-    url = message.text
+    url = message.text.strip()
+    # صنعنا كولباك داتا ذكي يخزن الرابط مؤقتاً في رسالة البوت
     kb = InlineKeyboardMarkup().add(
-        InlineKeyboardButton("🎥 فيديو MP4", callback_data=f"v|{url}"),
-        InlineKeyboardButton("🎧 صوت MP3", callback_data=f"a|{url}")
+        InlineKeyboardButton("🎥 فيديو MP4", callback_data=f"dl_v"),
+        InlineKeyboardButton("🎧 صوت MP3", callback_data=f"dl_a")
     )
-    await message.reply("⚡️ تم استلام الرابط! اختر الصيغة المطلوبة لـ MBAB:", reply_markup=kb)
+    await message.reply(f"📥 **تم استلام الرابط بنجاح!**\nاختر الصيغة التي تفضلها لـ MBAB:", reply_markup=kb)
 
-@dp.callback_query_handler(lambda c: c.data.startswith(('v|', 'a|')))
-async def download_logic(call: types.CallbackQuery):
-    data_split = call.data.split('|')
-    media_type = data_split[0]
-    # التأكد من دمج الرابط بالكامل لو فيه علامات |
-    url = "|".join(data_split[1:])
+# --- [ محرك التحميل ] ---
+@dp.callback_query_handler(lambda c: c.data.startswith('dl_'))
+async def process_download(call: types.CallbackQuery):
+    media_type = call.data.split('_')[1] # v أو a
+    # الرابط موجود في نص الرسالة اللي البوت رد بيها
+    url = call.message.reply_to_message.text 
     
-    wait_msg = await bot.send_message(call.message.chat.id, "⏳ جاري التحميل... ثواني يا بطل")
+    wait_msg = await bot.send_message(call.message.chat.id, "⏳ جاري المعالجة والتحميل... انتظر قليلاً")
     
-    folder = f"dl_{call.from_user.id}"
+    folder = f"temp_{call.from_user.id}"
     if not os.path.exists(folder): os.makedirs(folder)
     file_path = os.path.join(folder, f"MBAB_{call.from_user.id}")
 
@@ -100,43 +101,40 @@ async def download_logic(call: types.CallbackQuery):
             if media_type == 'a': 
                 filename = filename.rsplit('.', 1)[0] + '.mp3'
 
-        with open(filename, 'rb') as media_file:
+        with open(filename, 'rb') as f:
             if media_type == 'v':
-                await bot.send_video(call.message.chat.id, media_file, caption="✅ تم بواسطة MBAB")
+                await bot.send_video(call.message.chat.id, f, caption="✅ تم بواسطة MBAB")
             else:
-                await bot.send_audio(call.message.chat.id, media_file, caption="🎧 تم بواسطة MBAB")
+                await bot.send_audio(call.message.chat.id, f, caption="🎧 تم بواسطة MBAB")
         
         await bot.delete_message(call.message.chat.id, wait_msg.message_id)
     except Exception as e:
-        await bot.edit_message_text(f"❌ عذراً، الرابط غير مدعوم حالياً أو حدث خطأ فني.", call.message.chat.id, wait_msg.message_id)
-        print(f"Error: {e}")
+        await bot.edit_message_text(f"❌ حدث خطأ! قد يكون الرابط غير مدعوم أو خاص.", call.message.chat.id, wait_msg.message_id)
     finally:
         shutil.rmtree(folder, ignore_errors=True)
 
-# --- [ الأنظمة الإضافية ] ---
-@dp.callback_query_handler(lambda c: c.data in ['p', 'top', 'wd', 'stars'])
-async def handle_actions(call: types.CallbackQuery):
+# --- [ باقي الوظائف ] ---
+@dp.callback_query_handler(lambda c: c.data in ['p', 'wd', 'stars'])
+async def user_btns(call: types.CallbackQuery):
     uid = call.from_user.id
     if call.data == 'p':
         db.execute("SELECT points FROM users WHERE user_id = ?", (uid,))
-        await call.answer(f"رصيدك الحالي: {db.fetchone()[0]} نقطة", show_alert=True)
+        await call.answer(f"رصيدك: {db.fetchone()[0]} نقطة", show_alert=True)
     elif call.data == 'wd':
         db.execute("SELECT points FROM users WHERE user_id = ?", (uid,))
         p = db.fetchone()[0]
         if p >= 100:
             db.execute("UPDATE users SET points = points - 100 WHERE user_id = ?", (uid,))
             conn.commit()
-            await bot.send_message(ADMIN_ID, f"🚨 طلب سحب رصيد من المستخدم: `{uid}`")
-            await call.answer("✅ تم إرسال طلبك للأدمن!", show_alert=True)
-        else:
-            await call.answer(f"❌ رصيدك {p}.. محتاج 100 نقطة للسحب.", show_alert=True)
+            await bot.send_message(ADMIN_ID, f"🚨 طلب سحب من `{uid}`")
+            await call.answer("✅ تم إرسال طلبك!", show_alert=True)
+        else: await call.answer("❌ رصيدك غير كافٍ (محتاج 100).", show_alert=True)
     elif call.data == 'stars':
-        await bot.send_invoice(uid, title="تواصل خاص", description="دفع 5 نجوم لمراسلة مطور MBAB",
-            payload="pay", provider_token="", currency="XTR", prices=[LabeledPrice(label="5 Stars", amount=5)])
+        await bot.send_invoice(uid, title="تواصل", description="5 نجوم لمراسلة مطور MBAB",
+            payload="p", provider_token="", currency="XTR", prices=[LabeledPrice(label="Stars", amount=5)])
 
 @dp.pre_checkout_query_handler(lambda q: True)
 async def pre_c(q: types.PreCheckoutQuery): await bot.answer_pre_checkout_query(q.id, ok=True)
 
 if __name__ == '__main__':
-    print("🚀 MBAB Bot is Online and Ready!")
     executor.start_polling(dp, skip_updates=True)
