@@ -8,7 +8,7 @@ from threading import Thread
 
 # --- الإعدادات (تأكد من التوكن والرابط) ---
 API_TOKEN = '8579385725:AAGZd2wDPxjFyBq7x6R3AMhMJT46tX6Ld5c'
-MY_EARN_LINK = 'https://shrinkme.click/h3CBu' 
+MY_EARN_LINK = 'https://exe.io/MBABgold' 
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
